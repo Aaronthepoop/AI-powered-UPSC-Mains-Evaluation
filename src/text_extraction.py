@@ -1,30 +1,28 @@
 import boto3
-from time import sleep
+from PIL import Image
+import pdf2image
 
-def extract_text_from_pdf(file_path):
-    client = boto3.client('textract')
-    
-    # Open the PDF and send it to Textract
-    with open(file_path, 'rb') as file:
-        response = client.start_document_text_detection(
-            Document={'Bytes': file.read()}
-        )
-    
-    job_id = response['JobId']
-    
-    # Wait for the job to complete
-    while True:
-        result = client.get_document_text_detection(JobId=job_id)
-        status = result['JobStatus']
-        if status in ['SUCCEEDED', 'FAILED']:
-            break
-        sleep(5)
-    
-    if status == 'SUCCEEDED':
-        text = ''
-        for item in result['Blocks']:
-            if item['BlockType'] == 'LINE':
-                text += item['Text'] + '\n'
-        return text
-    else:
-        raise Exception("Textract job failed")
+def extract_text_from_pdf(pdf_path):
+    # Convert PDF to images
+    images = pdf2image.convert_from_path(pdf_path)
+    text = ""
+    for image in images:
+        # Save image and pass to Textract
+        text += extract_text_from_image(image)
+    return text
+
+def extract_text_from_image(image):
+    # Use Textract for image
+    textract_client = boto3.client('textract')
+    image_bytes = image.tobytes()  # Convert to byte format
+    response = textract_client.detect_document_text(Document={'Bytes': image_bytes})
+    text = ""
+    for item in response['Blocks']:
+        if item['BlockType'] == 'LINE':
+            text += item['Text'] + "\n"
+    return text
+
+# Example usage
+if __name__ == "__main__":
+    pdf_text = extract_text_from_pdf('student_submission.pdf')
+    print(pdf_text)
